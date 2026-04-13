@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DOI to BibTeX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero-card">
+        <p class="eyebrow">DOI Metadata Tool</p>
+        <h1>Generate clean BibTeX directly from one DOI or many.</h1>
+        <p class="lede">
+          Paste DOI values, DOI URLs, or raw identifiers. The app normalizes each
+          DOI, fetches publication metadata from scholarly registries, and builds
+          BibTeX entries that keep the DOI field and exclude abstract content.
+        </p>
+
+        <form id="doi-form" class="lookup-form">
+          <label class="field-label" for="doi-input">DOIs</label>
+          <textarea
+            id="doi-input"
+            name="doi"
+            rows="6"
+            autocomplete="off"
+            placeholder="10.1038/s41586-020-2649-2&#10;10.1126/science.169.3946.635&#10;https://doi.org/10.1145/3368089.3409715"
+            required
+          ></textarea>
+          <p class="input-hint">Use one DOI per line, or paste a comma-separated list.</p>
+          <div class="actions-row">
+            <button id="submit-button" type="submit">Generate</button>
+          </div>
+        </form>
+
+        <div class="meta-strip">
+          <div>
+            <span class="meta-label">Normalized DOIs</span>
+            <code id="normalized-doi">Waiting for input</code>
+          </div>
+          <div>
+            <span class="meta-label">Metadata Sources</span>
+            <span id="metadata-source">None</span>
+          </div>
+        </div>
+
+        <p id="status-message" class="status-message" aria-live="polite">
+          Enter one or more DOIs to build BibTeX citations.
+        </p>
+      </section>
+
+      <section class="result-card">
+        <div class="result-header">
+          <div>
+            <p class="result-title">BibTeX Output</p>
+            <p class="result-subtitle">Abstract is intentionally omitted. DOI is preserved.</p>
+          </div>
+          <button id="copy-button" class="secondary-button" type="button" disabled>
+            Copy
+          </button>
+        </div>
+
+        <pre id="bibtex-output" class="result-output" tabindex="0">No citation generated yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
