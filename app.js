@@ -8,6 +8,8 @@ const copyButton = document.querySelector("#copy-button");
 const submitButton = document.querySelector("#submit-button");
 
 const DOI_PATTERN = /(10\.\d{4,9}\/[\w.()/:;-]+)/i;
+const LOOKUP_CONCURRENCY = 4;
+const LOOKUP_RETRY_LIMIT = 2;
 
 function normalizeDoi(rawValue) {
   const trimmed = rawValue.trim();
@@ -133,8 +135,7 @@ function buildCitationKey(metadata) {
   const firstAuthor = pickFirst(metadata.author) || pickFirst(metadata.editor) || {};
   const family = slugifyFragment(firstAuthor.family || firstAuthor.literal || "source");
   const year = getYearFromIssued(metadata.issued) || "nodate";
-  const title = slugifyFragment(pickFirst(metadata.title) || "work");
-  return `${family}${year}${title.slice(0, 18)}`;
+  return `${family}${year}`;
 }
 
 function buildBibtexFields(metadata, doi) {
@@ -173,8 +174,11 @@ function buildBibtexFields(metadata, doi) {
   addField("number", metadata.issue || metadata.number);
   addField("pages", metadata.page || metadata.pages);
   addField("publisher", metadata.publisher);
-  addField("url", metadata.URL || metadata.url || `https://doi.org/${doi}`);
   addField("doi", doi);
+
+  if (!doi) {
+    addField("url", metadata.URL || metadata.url);
+  }
 
   return {
     entryType,
@@ -248,11 +252,44 @@ function toCslFromDatacite(data) {
   };
 }
 
+function openAlexPages(openAlexWork) {
+  const firstPage = openAlexWork.biblio?.first_page;
+  const lastPage = openAlexWork.biblio?.last_page;
+
+  if (firstPage && lastPage) {
+    return `${firstPage}-${lastPage}`;
+  }
+
+  return firstPage || lastPage || "";
+}
+
+function toCslFromOpenAlex(work) {
+  const doiUrl = work.doi || work.ids?.doi || "";
+
+  return {
+    type: work.type,
+    title: work.title ? [work.title] : work.display_name ? [work.display_name] : [],
+    author: (work.authorships || [])
+      .map((authorship) => authorship.raw_author_name || authorship.author?.display_name)
+      .filter(Boolean)
+      .map((name) => ({ literal: name })),
+    editor: [],
+    issued: work.publication_year ? { "date-parts": [[Number(work.publication_year)]] } : null,
+    "container-title": work.primary_location?.source?.display_name ? [work.primary_location.source.display_name] : [],
+    volume: work.biblio?.volume,
+    issue: work.biblio?.issue,
+    page: openAlexPages(work),
+    publisher: work.primary_location?.source?.host_organization_name || work.primary_location?.source?.display_name || "",
+    DOI: doiUrl.replace(/^https?:\/\/doi\.org\//i, ""),
+    URL: work.primary_location?.landing_page_url || doiUrl,
+  };
+}
+
 async function fetchCrossrefMetadata(doi) {
   const response = await fetch(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
 
   if (!response.ok) {
-    throw new Error("Crossref lookup failed.");
+    throw new Error(`Crossref lookup failed (${response.status}).`);
   }
 
   const payload = await response.json();
@@ -266,7 +303,7 @@ async function fetchDataciteMetadata(doi) {
   const response = await fetch(`https://api.datacite.org/dois/${encodeURIComponent(doi)}`);
 
   if (!response.ok) {
-    throw new Error("DataCite lookup failed.");
+    throw new Error(`DataCite lookup failed (${response.status}).`);
   }
 
   const payload = await response.json();
@@ -276,12 +313,79 @@ async function fetchDataciteMetadata(doi) {
   };
 }
 
+async function fetchOpenAlexMetadata(doi) {
+  const response = await fetch(`https://api.openalex.org/works/${encodeURIComponent(`doi:${doi}`)}`);
+
+  if (!response.ok) {
+    throw new Error(`OpenAlex lookup failed (${response.status}).`);
+  }
+
+  const payload = await response.json();
+  return {
+    source: "OpenAlex",
+    metadata: toCslFromOpenAlex(payload),
+  };
+}
+
 async function fetchMetadata(doi) {
   try {
     return await fetchCrossrefMetadata(doi);
-  } catch {
-    return fetchDataciteMetadata(doi);
+  } catch (crossrefError) {
+    try {
+      return await fetchOpenAlexMetadata(doi);
+    } catch {
+      try {
+        return await fetchDataciteMetadata(doi);
+      } catch {
+        throw crossrefError;
+      }
+    }
   }
+}
+
+function isTransientLookupError(error) {
+  const message = String((error && error.message) || "");
+  return /\b(408|409|425|429|500|502|503|504)\b/.test(message) || message === "Failed to fetch";
+}
+
+async function generateBibtexWithRetry(doi, retriesLeft = LOOKUP_RETRY_LIMIT) {
+  try {
+    return await generateBibtexForDoi(doi);
+  } catch (error) {
+    if (!retriesLeft || !isTransientLookupError(error)) {
+      throw error;
+    }
+
+    return generateBibtexWithRetry(doi, retriesLeft - 1);
+  }
+}
+
+async function settleDois(dois, worker, concurrency = LOOKUP_CONCURRENCY) {
+  const settled = new Array(dois.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < dois.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+
+      try {
+        settled[currentIndex] = {
+          status: "fulfilled",
+          value: await worker(dois[currentIndex]),
+        };
+      } catch (error) {
+        settled[currentIndex] = {
+          status: "rejected",
+          reason: error,
+        };
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrency, dois.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return settled;
 }
 
 function setBusy(isBusy) {
@@ -305,7 +409,7 @@ form.addEventListener("submit", async (event) => {
     updateOutput("Loading metadata...");
     setBusy(true);
 
-    const results = await Promise.allSettled(dois.map((doi) => generateBibtexForDoi(doi)));
+    const results = await settleDois(dois, generateBibtexWithRetry);
     const fulfilled = [];
     const rejected = [];
 

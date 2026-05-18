@@ -13,6 +13,18 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="site-brand" href="https://aaronkhodami.org/" target="_blank" rel="noreferrer">
+          Aaron Khodami
+        </a>
+        <nav class="site-nav" aria-label="Site links">
+          <a href="https://aaronkhodami.org/" target="_blank" rel="noreferrer">Main Website</a>
+          <a href="https://aaronkhodami.org/publications/" target="_blank" rel="noreferrer">Publications</a>
+        </nav>
+      </div>
+    </header>
+
     <main class="page-shell">
       <section class="hero-card">
         <p class="eyebrow">DOI Metadata Tool</p>
@@ -21,6 +33,9 @@
           Paste DOI values, DOI URLs, or raw identifiers. The app normalizes each
           DOI, fetches publication metadata from scholarly registries, and builds
           BibTeX entries that keep the DOI field and exclude abstract content.
+        </p>
+        <p class="tool-link">
+          Part of the Aaron Khodami research tools collection.
         </p>
 
         <form id="doi-form" class="lookup-form">
