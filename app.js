@@ -113,6 +113,7 @@ function formatPeople(people = []) {
 
 function mapCslTypeToBibtex(type) {
   const mappings = {
+    // CSL types
     article: "article",
     "article-journal": "article",
     "article-magazine": "article",
@@ -126,6 +127,23 @@ function mapCslTypeToBibtex(type) {
     report: "techreport",
     webpage: "misc",
     post: "misc",
+    // Crossref-native types
+    "journal-article": "article",
+    "proceedings-article": "inproceedings",
+    "book-chapter": "incollection",
+    "book-section": "incollection",
+    "book-part": "incollection",
+    "posted-content": "article",
+    monograph: "book",
+    "edited-book": "book",
+    "reference-book": "book",
+    "book-set": "book",
+    "book-series": "book",
+    "proceedings": "inproceedings",
+    // OpenAlex-native types
+    preprint: "article",
+    review: "article",
+    letter: "article",
   };
 
   return mappings[type] || "misc";
